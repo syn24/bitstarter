@@ -24,8 +24,10 @@ References:
 var fs = require('fs');
 var program = require('commander');
 var cheerio = require('cheerio');
+var restler = require('restler');
 var HTMLFILE_DEFAULT = "index.html";
 var CHECKSFILE_DEFAULT = "checks.json";
+var URL_DEFAULT = "http://infinite-river-5740.herokuapp.com/";
 
 var assertFileExists = function(infile) {
     var instr = infile.toString();
@@ -37,7 +39,18 @@ var assertFileExists = function(infile) {
 };
 
 var cheerioHtmlFile = function(htmlfile) {
-    return cheerio.load(fs.readFileSync(htmlfile));
+         return cheerio.load(htmlfile);
+};
+
+var restlerLoad = function(url, checks) {
+  restler.get(url).on('complete', function(result) {
+    if (result instanceof Error) {
+      sys.puts('Error: ' + result.message);
+      this.retry(5000); // try again after 5 sec
+    } else {
+      output(result, checks);
+    }
+  });
 };
 
 var loadChecks = function(checksfile) {
@@ -61,14 +74,24 @@ var clone = function(fn) {
     return fn.bind({});
 };
 
+var output = function(rawfile, checks) {
+      var checkJson = checkHtmlFile(rawfile, checks);
+      var outJson = JSON.stringify(checkJson, null, 4);
+      console.log(outJson);
+}
+
 if(require.main == module) {
     program
         .option('-c, --checks <check_file>', 'Path to checks.json', clone(assertFileExists), CHECKSFILE_DEFAULT)
         .option('-f, --file <html_file>', 'Path to index.html', clone(assertFileExists), HTMLFILE_DEFAULT)
+        .option('-u, --url <url>', 'Url', null, URL_DEFAULT)
         .parse(process.argv);
-    var checkJson = checkHtmlFile(program.file, program.checks);
-    var outJson = JSON.stringify(checkJson, null, 4);
-    console.log(outJson);
+    var restlerLoadResult;
+    if (program.url) {
+       restlerLoad(program.url, program.checks);
+    }  else {
+      output(fs.readFileSync(program.file), program.checks);
+    }
 } else {
     exports.checkHtmlFile = checkHtmlFile;
 }
